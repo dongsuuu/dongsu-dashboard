@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dongsu AI Agent 명령 센터</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+            background: #0a0e1a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(90deg, #1a1f2e 0%, #0f1419 100%);
+            padding: 20px;
+            border-bottom: 1px solid #2a3441;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .agent-status {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(35, 134, 54, 0.2);
+            border: 1px solid #238636;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* 사이드바 - 에이전트 목록 */
+        .sidebar {
+            background: #161b22;
+            border-radius: 12px;
+            border: 1px solid #2a3441;
+            padding: 20px;
+            height: fit-content;
+        }
+        
+        .sidebar h2 {
+            font-size: 16px;
+            color: #c9d1d9;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .agent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .agent-card {
+            padding: 15px;
+            background: #0d1117;
+            border-radius: 8px;
+            border: 1px solid #21262d;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .agent-card:hover {
+            border-color: #58a6ff;
+            background: #1f242c;
+        }
+        
+        .agent-card.active {
+            border-color: #238636;
+            background: rgba(35, 134, 54, 0.1);
+        }
+        
+        .agent-card .name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .agent-card .role {
+            font-size: 12px;
+            color: #8b949e;
+        }
+        
+        .agent-card .status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+        
+        .agent-card .status-dot-small {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        
+        /* 메인 콘텐츠 */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: #161b22;
+            border-radius: 12px;
+            border: 1px solid #2a3441;
+            padding: 20px;
+        }
+        
+        .panel h2 {
+            font-size: 16px;
+            color: #c9d1d9;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* 명령 패널 */
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .command-btn {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .command-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(31, 111, 235, 0.4);
+        }
+        
+        .command-btn .icon {
+            font-size: 24px;
+        }
+        
+        .command-btn.secondary {
+            background: #21262d;
+            border: 1px solid #30363d;
+        }
+        
+        .command-btn.secondary:hover {
+            background: #30363d;
+            box-shadow: none;
+        }
+        
+        .command-btn.danger {
+            background: linear-gradient(135deg, #da3633 0%, #f85149 100%);
+        }
+        
+        .command-btn.danger:hover {
+            box-shadow: 0 4px 12px rgba(218, 54, 51, 0.4);
+        }
+        
+        /* 활동 로그 */
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #21262d;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .log-time {
+            color: #8b949e;
+            min-width: 80px;
+        }
+        
+        .log-agent {
+            color: #58a6ff;
+            min-width: 100px;
+        }
+        
+        .log-action {
+            color: #c9d1d9;
+        }
+        
+        .log-entry.success .log-action {
+            color: #3fb950;
+        }
+        
+        .log-entry.error .log-action {
+            color: #f85149;
+        }
+        
+        /* 상태 표시 */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: #0d1117;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-box .label {
+            font-size: 11px;
+            color: #8b949e;
+            margin-bottom: 5px;
+        }
+        
+        .stat-box .value {
+            font-size: 20px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* 작업 큐 */
+        .task-queue {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .task-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0d1117;
+            border-radius: 6px;
+            border-left: 3px solid #1f6feb;
+        }
+        
+        .task-item.running {
+            border-left-color: #238636;
+        }
+        
+        .task-item.pending {
+            border-left-color: #d29922;
+        }
+        
+        .task-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .task-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .task-meta {
+            font-size: 11px;
+            color: #8b949e;
+        }
+        
+        .task-status {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .task-status.running {
+            background: rgba(35, 134, 54, 0.2);
+            color: #3fb950;
+        }
+        
+        .task-status.pending {
+            background: rgba(210, 153, 34, 0.2);
+            color: #d29922;
+        }
+        
+        /* 터미널 스타일 입력 */
+        .terminal-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .terminal-input .prompt {
+            color: #3fb950;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        .terminal-input input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #c9d1d9;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 dongsu AI Agent 명령 센터</h1>
+        <div class="agent-status">
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span>모든 에이전트 활성</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- 사이드바 -->
+        <div class="sidebar">
+            <h2>🎯 활성 에이전트</h2>
+            <div class="agent-list">
+                <div class="agent-card active" onclick="selectAgent('trading')">
+                    <div class="name">📈 Trading Agent</div>
+                    <div class="role">레버리지 선물 트레이딩</div>
+                    <div class="status">
+                        <span class="status-dot-small" style="background: #3fb950;"></span>
+                        <span>실행 중</span>
+                    </div>
+                </div>
+                
+                <div class="agent-card" onclick="selectAgent('research')">
+                    <div class="name">🔍 Research Agent</div>
+                    <div class="role">프로젝트/에어드랍 분석</div>
+                    <div class="status">
+                        <span class="status-dot-small" style="background: #3fb950;"></span>
+                        <span>대기 중</span>
+                    </div>
+                </div>
+                
+                <div class="agent-card" onclick="selectAgent('onchain')">
+                    <div class="name">⛓️ On-Chain Agent</div>
+                    <div class="role">가스/고래 모니터링</div>
+                    <div class="status">
+                        <span class="status-dot-small" style="background: #3fb950;"></span>
+                        <span>실행 중</span>
+                    </div>
+                </div>
+                
+                <div class="agent-card" onclick="selectAgent('social')">
+                    <div class="name">💬 Social Agent</div>
+                    <div class="role">Moltbook 홍보/소통</div>
+                    <div class="status">
+                        <span class="status-dot-small" style="background: #d29922;"></span>
+                        <span>6시간 후 실행</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 메인 콘텐츠 -->
+        <div class="main-content">
+            <!-- 상태 요약 -->
+            <div class="panel">
+                <h2>📊 시스템 상태</h2>
+                <div class="stats-row">
+                    <div class="stat-box">
+                        <div class="label">활성 포지션</div>
+                        <div class="value" id="active-positions">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">오늘 거래</div>
+                        <div class="value" id="today-trades">1</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">승률</div>
+                        <div class="value" id="win-rate">100%</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">현재 자본</div>
+                        <div class="value" id="current-capital">$10,042</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 명령 패널 -->
+            <div class="panel">
+                <h2>🎮 명령 패널</h2>
+                <div class="command-grid">
+                    <button class="command-btn" onclick="sendCommand('analyze', 'ETH')">
+                        <span class="icon">📊</span>
+                        <span>ETH 분석</span>
+                    </button>
+                    
+                    <button class="command-btn" onclick="sendCommand('analyze', 'BTC')">
+                        <span class="icon">📊</span>
+                        <span>BTC 분석</span>
+                    </button>
+                    
+                    <button class="command-btn secondary" onclick="sendCommand('positions')">
+                        <span class="icon">📋</span>
+                        <span>포지션 확인</span>
+                    </button>
+                    
+                    <button class="command-btn secondary" onclick="sendCommand('journal')">
+                        <span class="icon">📖</span>
+                        <span>매매일지</span>
+                    </button>
+                    
+                    <button class="command-btn secondary" onclick="sendCommand('report')">
+                        <span class="icon">📈</span>
+                        <span>성과 리포트</span>
+                    </button>
+                    
+                    <button class="command-btn danger" onclick="sendCommand('stop')">
+                        <span class="icon">⏹️</span>
+                        <span>트레이딩 중지</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 작업 큐 -->
+            <div class="panel">
+                <h2>⏳ 작업 큐</h2>
+                <div class="task-queue" id="task-queue">
+                    <div class="task-item running">
+                        <div class="task-info">
+                            <div class="task-name">🔄 자동 트레이딩 모니터링</div>
+                            <div class="task-meta">30분마다 시장 분석 | 다음: 12분 후</div>
+                        </div>
+                        <span class="task-status running">실행 중</span>
+                    </div>
+                    
+                    <div class="task-item pending">
+                        <div class="task-info">
+                            <div class="task-name">📝 Moltbook 홍보 게시글</div>
+                            <div class="task-meta">예정: 06:00</div>
+                        </div>
+                        <span class="task-status pending">대기</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 활동 로그 -->
+            <div class="panel">
+                <h2>📝 실시간 활동 로그</h2>
+                <div class="log-container" id="log-container">
+                    <div class="log-entry success">
+                        <span class="log-time">00:15:23</span>
+                        <span class="log-agent">[Trading]</span>
+                        <span class="log-action">ETH LONG 10x 진입 @ $1,890 | 목표: $1,970</span>
+                    </div>
+                    
+                    <div class="log-entry success">
+                        <span class="log-time">00:15:45</span>
+                        <span class="log-agent">[Trading]</span>
+                        <span class="log-action">ETH 청산 @ $1,980 | PnL: +$420 (10x) | 목표가 도달</span>
+                    </div>
+                    
+                    <div class="log-entry">
+                        <span class="log-time">00:16:00</span>
+                        <span class="log-agent">[System]</span>
+                        <span class="log-action">다음 분석 예정: 30분 후</span>
+                    </div>
+                </div>
+                
+                <div class="terminal-input">
+                    <span class="prompt">dongsu@></span>
+                    <input type="text" id="command-input" placeholder="명령어 입력 (예: analyze ETH, positions, stop)" onkeypress="handleCommand(event)">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 명령어 처리
+        function handleCommand(event) {
+            if (event.key === 'Enter') {
+                const input = document.getElementById('command-input');
+                const command = input.value.trim();
+                
+                if (command) {
+                    addLog('User', command, 'info');
+                    processCommand(command);
+                    input.value = '';
+                }
+            }
+        }
+        
+        function sendCommand(action, param = '') {
+            const command = param ? `${action} ${param}` : action;
+            addLog('User', command, 'info');
+            processCommand(command);
+        }
+        
+        function processCommand(command) {
+            // API 호출 시뮬레이션
+            setTimeout(() => {
+                switch(command.toLowerCase()) {
+                    case 'analyze eth':
+                        addLog('Trading', 'ETH 분석 중... EMA, RSI, 볼린저 밴드 확인', 'info');
+                        setTimeout(() => {
+                            addLog('Trading', 'ETH 분석 완료: LONG 신호 (신뢰도 75%) | 5x 추천', 'success');
+                        }, 1000);
+                        break;
+                    case 'analyze btc':
+                        addLog('Trading', 'BTC 분석 중...', 'info');
+                        setTimeout(() => {
+                            addLog('Trading', 'BTC 분석 완료: 관망 추천 (추세 불분명)', 'info');
+                        }, 1000);
+                        break;
+                    case 'positions':
+                        addLog('Trading', '현재 보유 포지션: 없음', 'info');
+                        break;
+                    case 'journal':
+                        addLog('System', '매매일지: https://github.com/dongsuuu/dongsu-agent/tree/main/archive/trading/journals', 'info');
+                        break;
+                    case 'report':
+                        addLog('Trading', '성과 리포트 생성 중...', 'info');
+                        setTimeout(() => {
+                            addLog('Trading', '승률: 100% | 총 수익: +$420 | 거래: 1회', 'success');
+                        }, 500);
+                        break;
+                    case 'stop':
+                        addLog('System', '트레이딩 중지 명령 수신...', 'error');
+                        setTimeout(() => {
+                            addLog('System', '모든 포지션 청산 완료. 트레이딩 중지됨.', 'info');
+                        }, 1000);
+                        break;
+                    default:
+                        addLog('System', `알 수 없는 명령: ${command}`, 'error');
+                }
+            }, 300);
+        }
+        
+        function addLog(agent, action, type) {
+            const container = document.getElementById('log-container');
+            const time = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-agent">[${agent}]</span>
+                <span class="log-action">${action}</span>
+            `;
+            
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function selectAgent(agent) {
+            document.querySelectorAll('.agent-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            addLog('System', `${agent} 에이전트 선택됨`, 'info');
+        }
+        
+        // 30초마다 상태 업데이트
+        setInterval(() => {
+            // 실제 API 연동 시 데이터 가져오기
+            console.log('상태 업데이트...');
+        }, 30000);
+    </script>
+</body>
+</html>
