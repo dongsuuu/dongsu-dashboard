@@ -4,8 +4,8 @@ import Head from 'next/head';
 interface AgentStatus {
   name: string;
   status: 'running' | 'stopped' | 'error';
-  lastRun: string;
-  nextRun: string;
+  last_run: string;
+  next_run: string;
   logs: string[];
 }
 
@@ -19,27 +19,101 @@ interface TradingSignal {
   timestamp: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 export default function Dashboard() {
-  const [agents, setAgents] = useState<AgentStatus[]>([
-    { name: 'Trading Agent', status: 'running', lastRun: '14:53', nextRun: '15:00', logs: ['ETH BUY signal generated', 'BTC analysis complete'] },
-    { name: 'Research Agent', status: 'running', lastRun: '14:57', nextRun: '20:57', logs: ['Alpha report generated', '3 trending coins found'] },
-    { name: 'On-Chain Agent', status: 'running', lastRun: '14:58', nextRun: '15:58', logs: ['Gas price checked', 'ETH price: $1,890'] },
-  ]);
-
-  const [signals, setSignals] = useState<TradingSignal[]>([
-    { symbol: 'ETH', type: 'BUY', price: 1885.91, target: 1897.22, stop: 1829.33, confidence: 70, timestamp: '14:53' },
-  ]);
-
+  const [agents, setAgents] = useState<Record<string, AgentStatus>>({});
+  const [signals, setSignals] = useState<TradingSignal[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
 
-  const runAgent = (agentName: string) => {
-    console.log(`Running ${agentName}...`);
-    // TODO: API call to run agent
+  // API에서 데이터 가져오기
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 에이전트 상태
+      const agentsRes = await fetch(`${API_URL}/api/agents`);
+      if (agentsRes.ok) {
+        const agentsData = await agentsRes.json();
+        setAgents(agentsData);
+      }
+
+      // 시그널
+      const signalsRes = await fetch(`${API_URL}/api/trading/signals?limit=10`);
+      if (signalsRes.ok) {
+        const signalsData = await signalsRes.json();
+        setSignals(signalsData);
+      }
+
+      // 메트릭
+      const metricsRes = await fetch(`${API_URL}/api/metrics`);
+      if (metricsRes.ok) {
+        const metricsData = await metricsRes.json();
+        setMetrics(metricsData);
+      }
+    } catch (err) {
+      setError('API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');
+      console.error('API Error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const stopAgent = (agentName: string) => {
-    console.log(`Stopping ${agentName}...`);
-    // TODO: API call to stop agent
+  // 컴포넌트 마운트 시 데이터 로드
+  useEffect(() => {
+    fetchData();
+    // 30초마다 자동 갱신
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const runAgent = async (agentName: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/agents/${agentName}/control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_name: agentName, action: 'start' })
+      });
+      if (res.ok) {
+        fetchData(); // 상태 갱신
+      }
+    } catch (err) {
+      console.error('Run agent error:', err);
+    }
+  };
+
+  const stopAgent = async (agentName: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/agents/${agentName}/control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_name: agentName, action: 'stop' })
+      });
+      if (res.ok) {
+        fetchData(); // 상태 갱신
+      }
+    } catch (err) {
+      console.error('Stop agent error:', err);
+    }
+  };
+
+  const runAnalysis = async (symbol: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/trading/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, timeframe: '1h' })
+      });
+      if (res.ok) {
+        fetchData(); // 결과 갱신
+      }
+    } catch (err) {
+      console.error('Analysis error:', err);
+    }
   };
 
   return (
@@ -91,17 +165,39 @@ export default function Dashboard() {
 
         {/* Main Content */}
         <main className="flex-1 p-6">
-          {activeTab === 'overview' && (
+          {loading && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-[#8B949E]">Loading...</div>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-[#F85149]/20 border border-[#F85149] rounded-lg p-4 mb-6">
+              <div className="text-[#F85149] font-medium">⚠️ {error}</div>
+              <button
+                onClick={fetchData}
+                className="mt-2 text-sm text-[#58A6FF] hover:underline"
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Status Cards */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="bg-[#161B22] border border-[#30363D] rounded-lg p-4">
                   <div className="text-sm text-[#8B949E] mb-1">Active Agents</div>
-                  <div className="text-3xl font-bold text-[#238636]">3/3</div>
+                  <div className="text-3xl font-bold text-[#238636]">
+                    {metrics?.active_agents || 0}/3
+                  </div>
                 </div>
                 <div className="bg-[#161B22] border border-[#30363D] rounded-lg p-4">
                   <div className="text-sm text-[#8B949E] mb-1">Today's Signals</div>
-                  <div className="text-3xl font-bold text-[#58A6FF]">2</div>
+                  <div className="text-3xl font-bold text-[#58A6FF]">
+                    {signals.length}
+                  </div>
                 </div>
                 <div className="bg-[#161B22] border border-[#30363D] rounded-lg p-4">
                   <div className="text-sm text-[#8B949E] mb-1">Win Rate (24h)</div>
@@ -119,8 +215,8 @@ export default function Dashboard() {
                   <h2 className="font-semibold">Agent Status</h2>
                 </div>
                 <div className="divide-y divide-[#30363D]">
-                  {agents.map((agent) => (
-                    <div key={agent.name} className="px-4 py-4 flex items-center justify-between">
+                  {Object.entries(agents).map(([key, agent]) => (
+                    <div key={key} className="px-4 py-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`h-3 w-3 rounded-full ${
                           agent.status === 'running' ? 'bg-[#238636]' :
@@ -129,19 +225,19 @@ export default function Dashboard() {
                         <div>
                           <div className="font-medium">{agent.name}</div>
                           <div className="text-sm text-[#8B949E]">
-                            Last: {agent.lastRun} | Next: {agent.nextRun}
+                            Last: {agent.last_run ? new Date(agent.last_run).toLocaleTimeString() : 'N/A'}
                           </div>
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => runAgent(agent.name)}
+                          onClick={() => runAgent(key)}
                           className="px-3 py-1.5 bg-[#238636] hover:bg-[#2EA043] rounded text-sm"
                         >
                           Run Now
                         </button>
                         <button
-                          onClick={() => stopAgent(agent.name)}
+                          onClick={() => stopAgent(key)}
                           className="px-3 py-1.5 bg-[#21262D] hover:bg-[#30363D] rounded text-sm"
                         >
                           Stop
@@ -201,12 +297,21 @@ export default function Dashboard() {
                 <div className="bg-[#161B22] border border-[#30363D] rounded-lg p-4">
                   <h3 className="font-medium mb-4">Manual Analysis</h3>
                   <div className="space-y-3">
-                    <select className="w-full bg-[#0D1117] border border-[#30363D] rounded px-3 py-2">
-                      <option>BTC</option>
-                      <option>ETH</option>
-                      <option>SOL</option>
+                    <select 
+                      id="analysis-symbol"
+                      className="w-full bg-[#0D1117] border border-[#30363D] rounded px-3 py-2"
+                    >
+                      <option value="BTC">BTC</option>
+                      <option value="ETH">ETH</option>
+                      <option value="SOL">SOL</option>
                     </select>
-                    <button className="w-full bg-[#238636] hover:bg-[#2EA043] py-2 rounded">
+                    <button 
+                      onClick={() => {
+                        const symbol = (document.getElementById('analysis-symbol') as HTMLSelectElement)?.value;
+                        runAnalysis(symbol);
+                      }}
+                      className="w-full bg-[#238636] hover:bg-[#2EA043] py-2 rounded"
+                    >
                       Run Analysis
                     </button>
                   </div>
